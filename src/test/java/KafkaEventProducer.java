@@ -9,7 +9,7 @@ import java.util.Properties;
 
 public class KafkaEventProducer {
 
-    final Producer<Integer, byte[]> producer;
+    final Producer<Integer, String> producer;
     final EventGenerator eventGenerator;
     private String topicName;
 
@@ -26,7 +26,7 @@ public class KafkaEventProducer {
         producerConfig.setProperty(ProducerConfig.LINGER_MS_CONFIG, "0");
         producerConfig.put("producer.type", "async");
         producerConfig.setProperty(ProducerConfig.BATCH_SIZE_CONFIG, "0");
-        producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
         producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.IntegerSerializer");
         producer = new KafkaProducer<>(producerConfig);
 
@@ -37,7 +37,7 @@ public class KafkaEventProducer {
         System.out.println("Sending ... ");
         String randomMessage = eventGenerator.getRandomMessage();
 
-        producer.send(new ProducerRecord<>(topicName, randomMessage.getBytes())
+        producer.send(new ProducerRecord<>(topicName, randomMessage)
                 , (recordMetadata, e) -> {
                     System.out.printf("completed ");
                     System.out.println(randomMessage);

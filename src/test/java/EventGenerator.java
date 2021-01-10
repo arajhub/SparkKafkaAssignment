@@ -35,7 +35,7 @@ public class EventGenerator {
         params.put("CUST_ID",String.valueOf(ThreadLocalRandom.current().nextInt(1, 200 + 1)));
         params.put("DEVICE_ID",UUID.randomUUID().toString());
         StrSubstitutor substitutor = new StrSubstitutor(params);
-        return substitutor.replace(eventTemplate);
+        return substitutor.replace(eventTemplate).replaceAll(System.lineSeparator(), " ");
     }
 
 }

@@ -4,5 +4,5 @@
   "lat" : "${CUST_LAT}",
   "lon" : "${CUST_LON}",
   "cust_id" : "${CUST_ID}",
-  "device_id": "${DEVICE_ID}",
+  "device_id": "${DEVICE_ID}"
 }
