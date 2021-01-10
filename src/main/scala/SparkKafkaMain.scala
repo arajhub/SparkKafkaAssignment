@@ -25,11 +25,11 @@ object SparkKafkaMain {
   }
 
 
-  def getSparkSession: SparkSession ={
+  def getSparkSession: SparkSession = {
     SparkSession.builder().config(getSparkConf).getOrCreate()
   }
 
-  def startStream(kafkaBroker:String): Unit = {
+  def startStream(kafkaBroker: String): Unit = {
 
     val spark = getSparkSession
 
@@ -56,25 +56,27 @@ object SparkKafkaMain {
       .option("subscribe", KAFKA_TOPIC)
       .load()
 
-    val customerDf = spark.read.option("header","true").schema(custDataSchema).csv("src/test/resources/consumer.xlsx - Mall_Customers.csv")
+    val customerDf = spark.read.option("header", "true").schema(custDataSchema).csv("src/test/resources/consumer.xlsx - Mall_Customers.csv")
 
     customerDf.persist(StorageLevel.MEMORY_AND_DISK)
 
+    println("Customer details DataFrame")
     customerDf.show(truncate = false)
+
     import org.apache.spark.sql.functions.{col, udf}
     import spark.implicits._
 
-    val distance = udf{
-      (lat:String,lon:String) => {
+    val distance = udf {
+      (lat: String, lon: String) => {
         val latDouble = lat.toDouble
         val lonDouble = lon.toDouble
-        val custLoc = new Location("CustLocation",latDouble, lonDouble)
+        val custLoc = new Location("CustLocation", latDouble, lonDouble)
         custLoc.distanceTo(storeLocation)
       }
     }
 
-    val generateCouponDiscount = udf{
-      (gender:String,income:String,spendingScore:String) => {
+    val generateCouponDiscount = udf {
+      (gender: String, income: String, spendingScore: String) => {
         val incomeInt = income.toInt
         val spendingScoreInt = spendingScore.toInt
         if (spendingScoreInt > 80 && incomeInt > 80) 50
@@ -85,38 +87,85 @@ object SparkKafkaMain {
       }
     }
 
-
-    streamDf.selectExpr("CAST(value AS STRING)").as[String]
+    val feedDF = streamDf.selectExpr("CAST(value AS STRING)").as[String]
       .select("value")
-      .withColumn("jsonData",from_json(col("value"),feedSchema))
+      .withColumn("jsonData", from_json(col("value"), feedSchema))
       .select("jsonData.*")
-      .join(customerDf,col("cust_id") === col("CustomerID"))
+
+      //TO Test
+    println("Incoming Feed DataFrame")
+    feedDF.writeStream
+      .format("console")
+      .option("truncate", "false")
+      .start()
+
+
+    val joinedDF = feedDF
+      .join(customerDf, col("cust_id") === col("CustomerID"))
       .drop(col("cust_id"))
+
+    //To test
+    println("Joined DataFrame on Customer ID")
+    joinedDF.writeStream
+      .format("console")
+      .option("truncate", "false")
+      .start()
+
+    val joinedWithDistance = joinedDF
       .withColumn("distance", distance(col("lat"), col("lon")))
-      .filter(col("distance") < DISTANCE_THRESHOLD )
-      .withColumn("discount", generateCouponDiscount(col("Gender"),col("Annual Income (k$)"),col("Spending Score (1-100)")))
-      .select("CustomerID", "device_id", "discount").toJSON
+
+    //To test
+    println("Joined DataFrame with Distance")
+    joinedWithDistance.writeStream
+      .format("console")
+      .option("truncate", "false")
+      .start()
+
+    val nearByCustDF = joinedWithDistance
+      .filter(col("distance") < DISTANCE_THRESHOLD)
+
+    //To test
+    println("Near By Customer DataFrame")
+    nearByCustDF.writeStream
+      .format("console")
+      .option("truncate", "false")
+      .start()
+
+    val nearByCustWithDiscount = nearByCustDF
+      .withColumn("discount", generateCouponDiscount(col("Gender"), col("Annual Income (k$)"), col("Spending Score (1-100)")))
+      .select("CustomerID", "device_id", "discount")
+
+    //To test
+    println("Near By Customer DataFrame with Discount")
+    nearByCustWithDiscount.writeStream
+      .format("console")
+      .option("truncate", "false")
+      .start()
+
+
+    nearByCustWithDiscount.toJSON
       .writeStream
       .format("kafka")
       .option("kafka.bootstrap.servers", kafkaBroker)
-      .option("topic","nearby_discount")
+      .option("topic", "nearby_discount")
       .option("checkpointLocation", "/tmp/sparkKafkaAssignment/checkpoint") // <-- checkpoint directory
       .start()
 
     //To test
+    println("Final DataFrame to downstream service to send SMS to the nearby customers")
     spark.readStream.format("kafka")
       .option("kafka.bootstrap.servers", kafkaBroker)
       .option("subscribe", "nearby_discount")
       .load().selectExpr("CAST(value AS STRING)").as[String]
       .writeStream
       .format("console")
-      .option("truncate","false")
+      .option("truncate", "false")
       .start()
       .awaitTermination()
   }
 
   def main(args: Array[String]): Unit = {
-   startStream("localhost:9092")
+    startStream("localhost:9092")
   }
 
 
