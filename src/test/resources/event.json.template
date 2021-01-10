@@ -1,0 +1,8 @@
+{
+  "event_name": "cust_location",
+  "event_time": "${EVENT_TIME}",
+  "lat" : "${CUST_LAT}",
+  "lon" : "${CUST_LON}",
+  "cust_id" : "${CUST_ID}",
+  "device_id": "${DEVICE_ID}",
+}
